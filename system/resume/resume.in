@@ -1,0 +1,2 @@
+# Managed by workstation-setup. Dedicated unencrypted swap partition only.
+RESUME=UUID=@SWAP_UUID@

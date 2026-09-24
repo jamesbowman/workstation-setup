@@ -1,0 +1,5 @@
+#!/bin/sh
+set -- verify "$@"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib/entry.sh
+. "$(dirname -- "$0")/lib/entry.sh"

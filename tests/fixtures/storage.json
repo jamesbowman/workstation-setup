@@ -1,0 +1,21 @@
+{
+  "blockdevices": [
+    {
+      "name": "/dev/nvme1n1", "type": "disk", "fstype": null,
+      "uuid": null, "size": 1000000000000, "pkname": null,
+      "children": [
+        {"name": "/dev/nvme1n1p1", "type": "part", "fstype": "vfat", "uuid": "1234-5678", "size": 1073741824, "pkname": "/dev/nvme1n1"},
+        {"name": "/dev/nvme1n1p2", "type": "part", "fstype": "ext4", "uuid": "11111111-1111-1111-1111-111111111111", "size": 900000000000, "pkname": "/dev/nvme1n1"},
+        {"name": "/dev/nvme1n1p3", "type": "part", "fstype": "swap", "uuid": "22222222-2222-2222-2222-222222222222", "size": 25769803776, "pkname": "/dev/nvme1n1"}
+      ]
+    },
+    {
+      "name": "/dev/nvme0n1", "type": "disk", "fstype": null,
+      "uuid": null, "size": 1000000000000, "pkname": null,
+      "children": [
+        {"name": "/dev/nvme0n1p1", "type": "part", "fstype": "vfat", "uuid": "ABCD-1234", "size": 1073741824, "pkname": "/dev/nvme0n1"},
+        {"name": "/dev/nvme0n1p2", "type": "part", "fstype": "ntfs", "uuid": "WINDOWS", "size": 900000000000, "pkname": "/dev/nvme0n1"}
+      ]
+    }
+  ]
+}

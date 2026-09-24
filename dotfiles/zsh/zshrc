@@ -1,0 +1,12 @@
+# workstation-setup: deliberately small, with no plugin downloads.
+export EDITOR=vim
+export VISUAL=vim
+HISTFILE=$HOME/.zsh_history
+HISTSIZE=10000
+SAVEHIST=10000
+setopt APPEND_HISTORY HIST_IGNORE_DUPS
+autoload -Uz compinit
+compinit
+bindkey -e
+PROMPT='%n@%m:%~%# '
+[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local

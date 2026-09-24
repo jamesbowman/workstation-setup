@@ -1,0 +1,12 @@
+set nocompatible
+filetype plugin indent on
+syntax on
+set number
+set hidden
+set backspace=indent,eol,start
+set expandtab shiftwidth=4 softtabstop=4
+set incsearch hlsearch
+set ignorecase smartcase
+if filereadable(expand('~/.vimrc.local'))
+  source ~/.vimrc.local
+endif

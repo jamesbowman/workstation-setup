@@ -1,0 +1,10 @@
+# Practical selection; replace with texlive-full only if you need every package.
+texlive-latex-base
+texlive-latex-recommended
+texlive-latex-extra
+texlive-fonts-recommended
+texlive-xetex
+texlive-luatex
+texlive-science
+latexmk
+biber

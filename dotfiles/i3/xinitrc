@@ -1,0 +1,4 @@
+#!/bin/sh
+# Start with `startx` from a local console login.
+# Retain Debian's Xsession hooks, including D-Bus/systemd session environment.
+exec /etc/X11/Xsession i3

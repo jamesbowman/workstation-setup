@@ -1,0 +1,15 @@
+# Copy to workstation.toml on Debian. This local copy is ignored by Git.
+# Obtain identifiers using scripts/preflight; never guess a disk by its number.
+[storage]
+swap_uuid = ""                 # UUID of the existing 24 GiB Debian swap partition
+
+[network]
+interface = ""                 # Wired interface, for example enp2s0
+connection_uuid = ""           # Active NetworkManager wired connection UUID
+
+[packages]
+profiles = ["base", "desktop", "development", "media", "latex"]
+tailscale = true
+
+# Fixed project decisions: unencrypted disks, Secure Boot off, two-hour delay.
+# No credentials, usernames, or keys belong in this file.
