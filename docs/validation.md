@@ -1,5 +1,21 @@
 # Repository validation
 
+## Dotfile update (2026-09-25)
+
+Personal dotfiles were validated with isolated temporary-home Vim/zsh sessions
+and a tmux server using a private socket on macOS. The fixture suite was extended
+for vendored Vim assets and aliases; see [dotfile notes](dotfiles.md). Six new
+package names were confirmed in Debian trixie:
+[tig](https://packages.debian.org/trixie/tig),
+[gh](https://packages.debian.org/trixie/gh),
+[xfce4-terminal](https://packages.debian.org/trixie/xfce4-terminal),
+[fonts-terminus-otb](https://packages.debian.org/trixie/fonts-terminus-otb),
+[xclip](https://packages.debian.org/trixie/xclip), and
+[scrot](https://packages.debian.org/trixie/scrot).
+i3/X11 and physical power tests remain pending on Debian.
+
+## Initial setup validation
+
 Validated on macOS on 2026-09-24; no Linux installation or power-management
 commands were executed on the Mac.
 

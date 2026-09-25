@@ -67,17 +67,21 @@ node. Tailnet policy must permit the intended connections.
 
 ## User environment
 
-User setup installs `.zshrc`, `.tmux.conf`, `.vimrc`, `.config/i3/config`, and
-`.xinitrc` only when absent or identical. Any differing file stops the entire
+User setup installs `.zshrc`, `.zsh_aliases`, `.tmux.conf`, `.vimrc`, the vendored
+Vim runtime files, `.config/i3/config`, and `.xinitrc` only when absent or
+identical. Any differing file stops the entire
 phase before writes; inspect, manually merge or rename, then rerun. The scripts
 do not overwrite your prior settings.
 
-Run `startx` from a local console. Super+Enter opens xterm, Super+d runs dmenu,
+Run `startx` from a local console. Super+Enter opens xfce4-terminal, Super+d runs dmenu,
 and Super+Control+l locks. `xss-lock` integrates screen locking with suspend.
 No idle-sleep policy or sleep hotkey is installed before hardware acceptance.
 Test locking before relying on unattended suspend. Select zsh with
 `chsh -s /usr/bin/zsh`; local additions can use `~/.zshrc.local` and
 `~/.vimrc.local`.
+
+These configurations now follow mysettings and your local Mac preferences; see
+[dotfile sources and adaptations](dotfiles.md) for bindings and Debian changes.
 
 Keep Python 3.13 Debian-managed. For each project:
 

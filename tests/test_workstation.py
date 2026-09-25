@@ -195,6 +195,33 @@ class ChangeTests(QuietTest):
                 ws.apply_system({}, changes)
         self.assertEqual(changes.mock_calls, [])
 
+    def test_user_runtime_and_aliases_install_and_repeat_cleanly(self):
+        home = self.directory
+        (home / ".vim/plugin").mkdir(parents=True)
+        unrelated = home / ".vim/plugin/personal.vim"
+        unrelated.write_text('" Personal plugin\n')
+        with patch.object(ws.os, "geteuid", return_value=1000), patch.object(ws.Path, "home", return_value=home), \
+                patch.dict(ws.os.environ, {}, clear=True):
+            ws.apply_user(ws.Changes(True, home / "state"))
+            for path in (".zsh_aliases", ".vim/plugin/mru.vim", ".vim/doc/mru.txt", ".vim/compiler/python.vim"):
+                self.assertTrue((home / path).is_file(), path)
+            second = ws.Changes(True, home / "state")
+            ws.apply_user(second)
+            self.assertIsNone(second.backup)
+        self.assertEqual(unrelated.read_text(), '" Personal plugin\n')
+
+    def test_existing_plugin_conflict_blocks_user_install(self):
+        home = self.directory
+        plugin = home / ".vim/plugin/mru.vim"
+        plugin.parent.mkdir(parents=True)
+        plugin.write_text('" Locally edited MRU plugin\n')
+        with patch.object(ws.os, "geteuid", return_value=1000), patch.object(ws.Path, "home", return_value=home), \
+                patch.dict(ws.os.environ, {}, clear=True):
+            with self.assertRaisesRegex(ws.SetupError, "Existing dotfiles preserved"):
+                ws.apply_user(ws.Changes(True, home / "state"))
+        self.assertFalse((home / ".zshrc").exists())
+        self.assertEqual(plugin.read_text(), '" Locally edited MRU plugin\n')
+
     def test_successful_system_plan_never_executes_or_sleeps(self):
         facts = {"swap": {}, "interface": "enp2s0", "connection_uuid": SWAP_UUID,
                  "wol_live": "d", "wol_profile": "default"}

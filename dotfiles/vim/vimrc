@@ -1,12 +1,63 @@
+" Adapted from mysettings/.vimrc plus the newer local edits; see docs/dotfiles.md.
 set nocompatible
-filetype plugin indent on
-syntax on
-set number
-set hidden
+set shiftwidth=2 tabstop=8 softtabstop=2
+set autowrite autoindent showmatch matchtime=0
+set modeline notagbsearch expandtab incsearch
 set backspace=indent,eol,start
-set expandtab shiftwidth=4 softtabstop=4
-set incsearch hlsearch
-set ignorecase smartcase
+set nostartofline
+set viminfo='10,\"100,:20,%,n~/.viminfo
+set tags=./tags;,src/tags,src/tags2,py-tags
+set makeprg=bash\ go
+set wildignore=*.o,*.bin*,*.jpg,*.png,*.pdf,*.exe,*.a,*.mpy
+set nrformats-=octal
+set t_Co=256
+syntax off
+colorscheme industry
+highlight PmenuSel ctermfg=15 ctermbg=136
+highlight Pmenu ctermfg=239 ctermbg=235
+highlight MatchParen ctermbg=17 ctermfg=white
+
+" Control characters from the original are written as readable Vim key names.
+nnoremap gd oprint(f"<C-R><C-R>"={<C-R><C-R>"}")
+nnoremap <Esc>q !}fmt<CR>
+inoremap <Del> <BS>
+cnoremap <Del> <BS>
+nnoremap <F1> :bnext<CR>
+nnoremap <F2> :n#<CR>
+" Project-specific system-test shortcut, invoked only when pressed.
+nnoremap <F3> :let @z = @/<CR>?^class<CR>wyw:!python3 src/tests/systemtests.py -l3 -v "<C-R>"$"<CR>:let @/ = @z<CR>
+nnoremap <F5> :!bash go<CR>
+nnoremap <F6> zg
+nnoremap <F7> :cn<CR>
+nnoremap ` :!bash go<CR>
+nnoremap \ :up<CR>:MRU<CR>
+nnoremap <C-\> :n#<CR>
+nnoremap <PageUp> m'<C-U>
+nnoremap <PageDown> m'<C-D>
+inoremap <PageUp> <C-O><C-U>
+inoremap <PageDown> <C-O><C-D>
+" Use the X11 clipboard consistently instead of macOS pbpaste.
+nnoremap <F8> :r !xclip -selection clipboard -o<CR>
+nnoremap <F9> !}xclip -i -f -selection clipboard<CR>}j
+nnoremap <F10> yiwoprint(f"{<C-R>"=}")<Esc>
+
+augroup workstation_preferences
+  autocmd!
+  autocmd BufReadPost * if line("'\"") > 0 && line("'\"") <= line("$") | execute "normal! g'\"" | endif
+  autocmd BufNewFile,BufReadPost *.py setlocal sw=4 ts=8 sts=4
+  autocmd BufNewFile,BufReadPost *.[sS],*.asm setlocal sw=8 ts=8 sts=8
+  autocmd BufNewFile,BufReadPost *.sl,*.fs,*.frt setlocal filetype=forth
+  autocmd BufNewFile,BufReadPost *.sl,*.fs,*.frt setlocal iskeyword=!,@,33-35,%,$,38-64,A-Z,91-96,a-z,123-126,128-255
+  autocmd BufNewFile,BufReadPost *.sl setlocal sw=4 ts=8 sts=2
+  autocmd BufNewFile,BufReadPost *.fs,*.frt setlocal sw=4 ts=4 sts=4
+  autocmd BufNewFile,BufReadPost *.fs,*.frt highlight Comment term=standout cterm=bold ctermfg=3
+  autocmd Syntax forth if filereadable(expand('~/.vim/forth.vim')) | source ~/.vim/forth.vim | endif
+augroup END
+
+" Preserve the explicit project-local workflow: open Vim only in trusted projects.
+if filereadable('.local.vim')
+  source .local.vim
+endif
 if filereadable(expand('~/.vimrc.local'))
   source ~/.vimrc.local
 endif

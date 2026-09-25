@@ -45,7 +45,8 @@ console to enter i3. No display manager is installed.
 
 - `packages/`: selectable Debian manifests; Tailscale uses its official source.
 - `config/`: explicit machine identifiers in TOML; the local copy is ignored by Git.
-- `dotfiles/`: small i3, tmux, vim, and zsh configurations; differing files are preserved.
+- `dotfiles/`: personal i3, tmux, vim, and zsh configurations adapted from
+  [mysettings and local preferences](docs/dotfiles.md); differing files are preserved.
 - `system/`: inspectable sleep, resume, and SSH templates; WoL policy notes.
 - `scripts/`: guarded shell entry points and a Python 3.13 standard-library helper
   for TOML, safe argument lists, previews, backups, and validation.

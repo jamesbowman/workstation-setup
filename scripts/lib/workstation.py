@@ -365,11 +365,16 @@ def apply_packages(config, changes):
 
 
 def user_files(home):
-    return {home / ".zshrc": ROOT / "dotfiles/zsh/zshrc",
+    files = {home / ".zshrc": ROOT / "dotfiles/zsh/zshrc",
+            home / ".zsh_aliases": ROOT / "dotfiles/zsh/zsh_aliases",
             home / ".tmux.conf": ROOT / "dotfiles/tmux/tmux.conf",
             home / ".vimrc": ROOT / "dotfiles/vim/vimrc",
             home / ".config/i3/config": ROOT / "dotfiles/i3/config",
             home / ".xinitrc": ROOT / "dotfiles/i3/xinitrc"}
+    runtime = ROOT / "dotfiles/vim/runtime"
+    files.update({home / ".vim" / source.relative_to(runtime): source
+                  for source in sorted(runtime.rglob("*")) if source.is_file()})
+    return files
 
 
 def apply_user(changes):

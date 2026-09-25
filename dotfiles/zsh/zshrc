@@ -1,12 +1,24 @@
-# workstation-setup: deliberately small, with no plugin downloads.
+# Local Mac preferences adapted for Debian; no Homebrew or MacTeX paths.
 export EDITOR=vim
 export VISUAL=vim
-HISTFILE=$HOME/.zsh_history
+typeset -U path
+path=($path "$HOME/bin")
+if [[ -n "$STY" ]]; then
+  HISTFILE="$HOME/.zsh_history_${STY}_${WINDOW}"
+else
+  HISTFILE="$HOME/.zsh_history"
+fi
 HISTSIZE=10000
 SAVEHIST=10000
 setopt APPEND_HISTORY HIST_IGNORE_DUPS
 autoload -Uz compinit
 compinit
 bindkey -e
-PROMPT='%n@%m:%~%# '
-[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
+bindkey -s '^[[15~' 'bash go\n'
+PROMPT='$ '
+if [[ -r "$HOME/.zsh_aliases" ]]; then
+  source "$HOME/.zsh_aliases"
+fi
+if [[ -r "$HOME/.zshrc.local" ]]; then
+  source "$HOME/.zshrc.local"
+fi

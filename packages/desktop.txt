@@ -3,6 +3,10 @@ xinit
 x11-xserver-utils
 x11-utils
 xterm
+xfce4-terminal
+fonts-terminus-otb
+xclip
+scrot
 xfonts-base
 i3-wm
 i3status

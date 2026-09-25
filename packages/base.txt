@@ -2,6 +2,8 @@
 ca-certificates
 curl
 git
+tig
+gh
 sudo
 locales
 tzdata

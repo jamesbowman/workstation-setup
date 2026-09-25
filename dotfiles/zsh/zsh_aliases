@@ -1,0 +1,43 @@
+# Adapted from ~/.zsh_aliases and mysettings/.bash_aliases.
+alias gp='git pull && git push'
+alias g='bash go'
+alias ll='ls -l'
+alias p='python3'
+alias h=history
+alias t='tig status && gp'
+alias lsi='gh issue list'
+
+# Use the current project's venv instead of the Mac's fixed pyenv installation.
+ac() {
+  if [[ ! -r .venv/bin/activate ]]; then
+    print -u2 'No .venv found; create it with python3.13 -m venv .venv'
+    return 1
+  fi
+  source .venv/bin/activate
+}
+
+ii() { gh issue view "$@" --web; }
+
+# Explicitly invoked project bootstrap, preserving the original workflow.
+proj() {
+  if (( $# != 1 )) || [[ "$1" != [A-Za-z0-9]* || "$1" == *[^A-Za-z0-9_.-]* ]]; then
+    print -u2 'Usage: proj REPOSITORY'
+    return 1
+  fi
+  cd "$HOME" || return
+  git clone "git@github.com:jamesbowman/$1.git" || return
+  cd "$1" || return
+  [[ ! -r ./env ]] || source ./env || return
+  [[ ! -x ./fromcold ]] || ./fromcold
+}
+
+# Zsh's own history stack replaces the Bash-specific history manipulation.
+lh() {
+  (( $# == 1 )) || { print -u2 'Usage: lh DIRECTORY'; return 1; }
+  cd -- "$1" || return
+  fc -p "$PWD/.zsh_history" "$HISTSIZE" "$SAVEHIST"
+}
+
+if [[ -x "$HOME/bin/rs" ]]; then
+  alias rs='"$HOME/bin/rs"'
+fi
