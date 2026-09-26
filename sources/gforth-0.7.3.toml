@@ -1,0 +1,11 @@
+# Debian's patched 0.7.3 release, not a 0.7.9 development snapshot.
+# Hashes pinned from the source descriptor served by Debian over HTTPS.
+version = "0.7.3+dfsg-10"
+base_url = "https://deb.debian.org/debian/pool/main/g/gforth/"
+descriptor = "gforth_0.7.3+dfsg-10.dsc"
+build_packages = ["build-essential", "dpkg-dev", "debhelper", "libffi-dev", "libtool", "libtool-bin", "libltdl-dev", "xz-utils", "curl", "ca-certificates"]
+
+[sha256]
+"gforth_0.7.3+dfsg-10.dsc" = "b8594920be427e7dc0b0e7a7fa4e32b45d9da2b902ce538bfb8b99683c8adfce"
+"gforth_0.7.3+dfsg.orig.tar.xz" = "4f1ff40439f6c0bfed3ada0216fae0aa7fb306a8602ba723d36a0b591ae406dc"
+"gforth_0.7.3+dfsg-10.debian.tar.xz" = "5cfca77e704bf30c8bb4240f8a6c0f0e825800709e4de9fe8a7936ec284a9523"

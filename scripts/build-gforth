@@ -1,0 +1,6 @@
+#!/bin/sh
+# Preview by default. Run as your normal Debian user with --apply to build.
+set -- gforth "$@"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=lib/entry.sh
+. "$(dirname -- "$0")/lib/entry.sh"

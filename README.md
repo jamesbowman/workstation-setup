@@ -78,3 +78,6 @@ git diff --check
 Tests use temporary directories and fixtures. Debian configuration validation
 and hardware acceptance remain target-only.
 See [validation scope and pending target checks](docs/validation.md).
+
+For Gforth 0.7.3 compatibility, use the optional
+[pinned source-package build](docs/gforth.md). It does not add testing repositories.

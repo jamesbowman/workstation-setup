@@ -509,13 +509,90 @@ def verify(config):
     require(not errors, f"{len(errors)} checks failed.")
 
 
+def check_sha256(path, expected):
+    digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    require(digest == expected, f"SHA256 mismatch for {path}; refusing to use this download.")
+
+
+def build_gforth(apply):
+    require(os.geteuid() != 0 and not os.environ.get("SUDO_USER"),
+            "Build Gforth as your normal user, without sudo. Install the resulting packages separately.")
+    with (ROOT / "sources/gforth-0.7.3.toml").open("rb") as stream:
+        source = tomllib.load(stream)
+    print(f"Build Gforth {source['version']} from pinned Debian sources using this system's toolchain.")
+    print("Build dependencies (install separately on Debian):")
+    print(shlex.join(["sudo", "apt-get", "install", "--no-remove", *source["build_packages"]]))
+    for name, digest in source["sha256"].items():
+        print(f"Fetch {source['base_url']}{name}\n  SHA256 {digest}")
+    print("Extract with dpkg-source; build with dpkg-buildpackage -us -uc -b; test the resulting executable.")
+    print("No APT sources are changed and no packages are installed by this command.")
+    if not apply:
+        print("Preview only. Run scripts/build-gforth --apply after installing the build dependencies.")
+        return
+    for name in source["build_packages"]:
+        require(run("dpkg-query", "-W", "-f=${db:Status-Status}", name) == "installed",
+                f"Install build dependency {name} before building Gforth.")
+    base = Path.home() / ".cache/workstation-setup/gforth"
+    base.mkdir(parents=True, exist_ok=True)
+    work = Path(tempfile.mkdtemp(prefix="0.7.3-", dir=base))
+    print(f"Build directory (retained for logs/recovery): {work}", flush=True)
+    build_env = dict(ENV)
+    # Always run the package's normal tests, regardless of caller build flags.
+    build_env.pop("DEB_BUILD_OPTIONS", None)
+    build_env.pop("DEB_BUILD_PROFILES", None)
+    build_env.pop("GFORTHPATH", None)
+
+    def execute(*args, cwd=work):
+        print("RUN " + shlex.join(args), flush=True)
+        with (work / "build.log").open("a") as log:
+            log.write("\n$ " + shlex.join(args) + "\n")
+            log.flush()
+            result = subprocess.run(args, cwd=cwd, env=build_env, stdout=log, stderr=subprocess.STDOUT)
+        require(result.returncode == 0, f"Build failed: {shlex.join(args)}; inspect {work / 'build.log'}")
+
+    for name, digest in source["sha256"].items():
+        target = work / name
+        execute("curl", "--fail", "--location", "--silent", "--show-error", "--proto", "=https",
+                "--proto-redir", "=https", "--output", str(target), source["base_url"] + name)
+        check_sha256(target, digest)
+    tree = work / "source"
+    execute("dpkg-source", "-x", source["descriptor"], str(tree))
+    execute("dpkg-buildpackage", "-us", "-uc", "-b", cwd=tree)
+    debs = [work / f"{name}_{source['version']}_{arch}.deb" for name, arch in
+            (("gforth", "amd64"), ("gforth-lib", "amd64"), ("gforth-common", "all"))]
+    require(all(path.is_file() for path in debs), "Build did not produce the expected three packages.")
+    staged = work / "smoke-root"
+    for deb in debs:
+        execute("dpkg-deb", "--extract", str(deb), str(staged))
+    # Exercise the freshly built packages without installing or touching ~/.gforth.
+    smoke_home = work / "smoke-home"
+    smoke_home.mkdir()
+    smoke_env = dict(build_env, HOME=str(smoke_home))
+    forth_path = f"{staged}/usr/lib/x86_64-linux-gnu/gforth/0.7.3:{staged}/usr/share/gforth/0.7.3"
+    command = [str(staged / "usr/bin/gforth"), "-p", forth_path, "-e", "1 2 + . cr bye"]
+    result = subprocess.run(command, cwd=smoke_home, env=smoke_env, text=True, capture_output=True)
+    (work / "smoke-test.log").write_text(result.stdout + result.stderr)
+    require(result.returncode == 0 and result.stdout.strip() == "3",
+            f"Gforth smoke test failed; inspect {work / 'smoke-test.log'}")
+    (work / "build-packages.tsv").write_text(run("dpkg-query", "-W", "-f=${binary:Package}\t${Version}\n") + "\n")
+    shutil.copyfile(ROOT / "sources/gforth-0.7.3.toml", work / "source-lock.toml")
+    print("Build and arithmetic smoke test passed. Inspect build.log for the upstream test results.")
+    print("Review dependency resolution, then install these exact local packages:")
+    print(shlex.join(["sudo", "apt-get", "--simulate", "--no-remove", "install", *map(str, debs)]))
+    print(shlex.join(["sudo", "apt-get", "--no-remove", "install", *map(str, debs)]))
+    print("Then run: gforth --version; gforth -e '1 2 + . cr bye'")
+
+
 def main():
     guard()  # No filesystem changes or Linux commands before host validation.
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("phase", choices=("packages", "system", "user", "preflight", "verify"))
+    parser.add_argument("phase", choices=("packages", "system", "user", "preflight", "verify", "gforth"))
     parser.add_argument("--config", type=Path, default=ROOT / "config/workstation.toml")
     parser.add_argument("--apply", action="store_true", help="apply changes; default is preview")
     args = parser.parse_args()
+    if args.phase == "gforth":
+        build_gforth(args.apply)
+        return
     require(not args.apply or args.phase not in {"preflight", "verify"}, "preflight/verify are read-only.")
     if args.phase == "preflight":
         preflight()

@@ -1,5 +1,15 @@
 # Repository validation
 
+## Optional Gforth 0.7.3 build
+
+The pinned descriptor and both source archives were downloaded and their SHA256
+hashes checked on macOS. Debian packaging, build dependencies, patches, and the
+upstream `check` target were inspected without executing the source. The portable
+suite now has 33 passing tests, including preview non-mutation, checksum refusal,
+and root-build refusal. The launcher passes shell syntax checks. A Debian build
+has not run here; the builder requires Debian 13 and performs its build and smoke
+tests there before printing installation commands. See [Gforth setup](gforth.md).
+
 ## Existing installer networking and decimal swap capacity
 
 The portable suite now has 30 passing tests, including ifupdown discovery,

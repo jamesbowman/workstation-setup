@@ -54,6 +54,31 @@ class GuardTests(QuietTest):
                 execute.assert_not_called()
 
 
+class GforthTests(QuietTest):
+    def test_preview_does_not_download_build_or_write(self):
+        with patch.object(ws.os, "geteuid", return_value=1000), \
+                patch.dict(ws.os.environ, {}, clear=True), \
+                patch.object(ws.subprocess, "run") as execute, \
+                patch.object(ws.tempfile, "mkdtemp") as create:
+            ws.build_gforth(False)
+            execute.assert_not_called()
+            create.assert_not_called()
+
+    def test_source_checksum_mismatch_is_rejected(self):
+        source = self.directory / "source.tar.xz"
+        source.write_bytes(b"different archive")
+        with self.assertRaisesRegex(ws.SetupError, "SHA256 mismatch"):
+            ws.check_sha256(source, "0" * 64)
+        ws.check_sha256(source, ws.hashlib.sha256(source.read_bytes()).hexdigest())
+
+    def test_build_refuses_root_before_running_commands(self):
+        with patch.object(ws.os, "geteuid", return_value=0), \
+                patch.object(ws.subprocess, "run") as execute:
+            with self.assertRaisesRegex(ws.SetupError, "without sudo"):
+                ws.build_gforth(True)
+            execute.assert_not_called()
+
+
 class ConfigTests(QuietTest):
     def test_ifupdown_needs_no_connection_uuid_and_old_configs_still_work(self):
         template = (ROOT / "config/workstation.example.toml").read_text()
