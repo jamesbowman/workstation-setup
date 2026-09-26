@@ -1,0 +1,5 @@
+#!/bin/sh
+# Managed by workstation-setup. Only change the selected NIC's wake flags.
+set -eu
+[ "${IFACE:-}" = "@INTERFACE@" ] || exit 0
+exec /usr/sbin/ethtool -s "$IFACE" wol g

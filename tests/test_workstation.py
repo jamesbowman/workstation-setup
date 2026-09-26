@@ -169,6 +169,14 @@ class NetworkTests(QuietTest):
 
 
 class StorageTests(QuietTest):
+    def test_active_swap_uses_supported_read_only_output(self):
+        for output, expected in (("", []),
+                                 ("/dev/nvme0n1p2\n", ["/dev/nvme0n1p2"]),
+                                 ("/dev/nvme0n1p2\n/dev/zram0\n", ["/dev/nvme0n1p2", "/dev/zram0"])):
+            with self.subTest(output=output), patch.object(ws, "run", return_value=output) as command:
+                self.assertEqual(ws.active_swap_devices(), expected)
+                command.assert_called_once_with("swapon", "--show=NAME", "--noheadings", "--raw")
+
     def setUp(self):
         super().setUp()
         self.devices = ws.flatten(json.loads((ROOT / "tests/fixtures/storage.json").read_text())["blockdevices"])

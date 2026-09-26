@@ -2,13 +2,19 @@
 
 ## Existing installer networking and decimal swap capacity
 
-The portable suite now has 29 passing tests, including ifupdown discovery,
+The portable suite now has 30 passing tests, including ifupdown discovery,
 NetworkManager ownership conflicts, optional connection UUIDs, scoped hook
 execution with a harmless ethtool stand-in, and preservation of networking during
 system setup. The hook passes shell syntax validation. The target's approximately
 24 decimal GB swap capacity has a regression test, alongside undersized-swap
 rejection. These checks ran on macOS; actual WoL persistence and network-manager
 service validation remain target checks.
+
+The target run exposed an unsupported `swapon --json` assumption. Active swap
+discovery now uses the documented `--show=NAME --noheadings --raw` interface;
+the regression covers empty, single-device, and multiple-device output. Capacity
+still comes from lsblk. No swap activation/deactivation is performed. See the
+[Debian swapon manual](https://manpages.debian.org/trixie/mount/swapon.8.en.html).
 
 ## Dotfile update (2026-09-25)
 

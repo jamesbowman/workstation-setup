@@ -297,6 +297,13 @@ def network_facts(config):
             "wol_live": current[1], "wol_profile": profile}
 
 
+def active_swap_devices():
+    # Debian 13 swapon has no --json option. Only device names are needed here;
+    # the partition size is already available from lsblk's JSON output.
+    output = run("swapon", "--show=NAME", "--noheadings", "--raw")
+    return [os.path.realpath(name) for name in output.splitlines() if name]
+
+
 def system_facts(config):
     require(os.geteuid() == 0, "Run system preview/verification with sudo for hardware inspection.")
     require("HP EliteDesk 805 G6" in read("/sys/class/dmi/id/product_name"),
@@ -316,10 +323,10 @@ def system_facts(config):
                                     "NAME,TYPE,FSTYPE,UUID,SIZE,PKNAME,MOUNTPOINTS"))["blockdevices"])
     root = run("findmnt", "--noheadings", "--output", "SOURCE", "--mountpoint", "/")
     efi = run("findmnt", "--noheadings", "--output", "SOURCE", "--mountpoint", "/boot/efi")
-    active = json.loads(run("swapon", "--show", "--json", "--bytes", "--output", "NAME,SIZE"))["swapdevices"]
+    active = active_swap_devices()
     entries = json.loads(run("findmnt", "--fstab", "--evaluate", "--json", "--types", "swap", "--output", "SOURCE"))["filesystems"]
     swap = validate_storage(devices, config["storage"]["swap_uuid"], os.path.realpath(root), os.path.realpath(efi),
-                            [os.path.realpath(x["name"]) for x in active],
+                            active,
                             [os.path.realpath(x["source"]) for x in entries])
     check_resume_conflicts(config["storage"]["swap_uuid"])
     check_sleep_conflicts()
