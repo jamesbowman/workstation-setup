@@ -5,9 +5,9 @@ Post-install configuration for an **HP EliteDesk 805 G6 Mini**, Ryzen 5 PRO
 separate drives. Target: i3/X11, tmux, vim, zsh, Python 3.13, C/C++, Cairo/Pango,
 ffmpeg, ImageMagick, LaTeX, Tailscale, and OpenSSH.
 
-The baseline is **unencrypted ext4**, a dedicated **24 GiB swap partition**,
+The baseline is **unencrypted ext4**, a dedicated **approximately 24 GB swap partition**,
 UEFI/GRUB with an independent Debian EFI partition, **Secure Boot off**, wired
-NetworkManager networking, S3 suspend, S4 hibernation, a **two-hour**
+ifupdown or NetworkManager networking, S3 suspend, S4 hibernation, a **two-hour**
 suspend-then-hibernate delay, and magic-packet Wake-on-LAN. Power and wake
 reliability must be demonstrated on the physical machine.
 
@@ -24,8 +24,9 @@ cp config/workstation.example.toml config/workstation.toml
 sudo ./scripts/bootstrap packages --apply       # local console recommended
 ```
 
-Fill in the swap UUID, Ethernet interface, and active NetworkManager connection
-UUID in `config/workstation.toml`, using the preflight output. Read
+Fill in the swap UUID, Ethernet interface, and existing network manager in
+`config/workstation.toml`, using the preflight output. Leave `connection_uuid`
+empty for ifupdown; NetworkManager requires its active connection UUID. Read
 [recovery](docs/recovery.md) before the next stage.
 
 ```sh

@@ -55,6 +55,22 @@ class GuardTests(QuietTest):
 
 
 class ConfigTests(QuietTest):
+    def test_ifupdown_needs_no_connection_uuid_and_old_configs_still_work(self):
+        template = (ROOT / "config/workstation.example.toml").read_text()
+        configured = template.replace('swap_uuid = ""', f'swap_uuid = "{SWAP_UUID}"').replace(
+            'interface = ""', 'interface = "eno1"')
+        path = self.directory / "config.toml"
+        path.write_text(configured)
+        config = ws.load_config(path, identifiers=True)
+        self.assertEqual(config["network"]["manager"], "ifupdown")
+        self.assertIn("ifupdown", ws.packages(config))
+        old = "\n".join(line for line in configured.splitlines() if not line.startswith("manager ="))
+        path.write_text(old)
+        with self.assertRaisesRegex(ws.SetupError, "connection_uuid"):
+            ws.load_config(path, identifiers=True)
+        path.write_text(old.replace('connection_uuid = ""', f'connection_uuid = "{SWAP_UUID}"'))
+        self.assertEqual(ws.load_config(path, identifiers=True)["network"]["manager"], "networkmanager")
+
     def test_example_allows_package_preview_but_not_system(self):
         path = ROOT / "config/workstation.example.toml"
         config = ws.load_config(path)
@@ -77,6 +93,81 @@ class ConfigTests(QuietTest):
                     ws.load_config(path)
 
 
+class NetworkTests(QuietTest):
+    def setUp(self):
+        super().setUp()
+        self.config = {"network": {"manager": "ifupdown", "interface": "eno1", "connection_uuid": ""},
+                       "storage": {"swap_uuid": SWAP_UUID}}
+        self.responses = {
+            ("ifquery", "--no-mappings", "eno1"): "",
+            ("ifquery", "--state", "eno1"): "eno1=eno1",
+            ("nmcli", "-g", "GENERAL.STATE", "device", "show", "eno1"): "10 (unmanaged)",
+            ("ethtool", "eno1"): "Supports Wake-on: g\nWake-on: d\n",
+        }
+
+    def test_ifupdown_active_with_nm_unmanaged_or_absent(self):
+        for returncode in (0, 3, 4):
+            with self.subTest(returncode=returncode), patch.object(ws.shutil, "which", return_value="/usr/sbin/ifquery"), \
+                    patch.object(ws.subprocess, "run", return_value=Mock(returncode=returncode)), \
+                    patch.object(ws, "run", side_effect=lambda *args: self.responses[args]) as command:
+                facts = ws.network_facts(self.config)
+                self.assertEqual(facts["manager"], "ifupdown")
+                self.assertEqual(facts["wol_live"], "d")
+                self.assertIsNone(facts["wol_profile"])
+                if returncode:
+                    self.assertFalse(any(call.args[0] == "nmcli" for call in command.call_args_list))
+
+    def test_dual_ownership_is_rejected(self):
+        self.responses[("nmcli", "-g", "GENERAL.STATE", "device", "show", "eno1")] = "100 (connected)"
+        with patch.object(ws.shutil, "which", return_value="/usr/sbin/ifquery"), \
+                patch.object(ws.subprocess, "run", return_value=Mock(returncode=0)), \
+                patch.object(ws, "run", side_effect=lambda *args: self.responses[args]):
+            with self.assertRaisesRegex(ws.SetupError, "unmanaged"):
+                ws.network_facts(self.config)
+
+    def test_ifupdown_must_record_interface_as_up(self):
+        self.responses[("ifquery", "--state", "eno1")] = ""
+        with patch.object(ws.shutil, "which", return_value="/usr/sbin/ifquery"), \
+                patch.object(ws, "run", side_effect=lambda *args: self.responses[args]):
+            with self.assertRaisesRegex(ws.SetupError, "recorded as up"):
+                ws.network_facts(self.config)
+
+    def test_ifupdown_apply_only_changes_wake_flag_and_installs_executable_hook(self):
+        facts = {"manager": "ifupdown", "interface": "eno1", "connection_uuid": "",
+                 "wol_live": "d", "wol_profile": None}
+        changes = Mock(apply=True)
+        with patch.object(ws, "system_facts", return_value=facts), \
+                patch.object(ws, "run", return_value="permitrootlogin no\nx11forwarding no"):
+            ws.apply_system(self.config, changes)
+        hooks = [call for call in changes.file.call_args_list if call.args[0] == ws.WOL_HOOK]
+        self.assertEqual(len(hooks), 1)
+        self.assertEqual(hooks[0].args[2], 0o755)
+        self.assertIn('"eno1"', hooks[0].args[1])
+        changes.command.assert_any_call("ethtool", "-s", "eno1", "wol", "g")
+        for call in changes.command.call_args_list:
+            self.assertNotIn(call.args[0], {"nmcli", "ifup", "ifdown", "ip"})
+            self.assertFalse("NetworkManager" in call.args or "networking" in call.args)
+        self.assertNotIn(Path("/etc/network/interfaces"), [call.args[0] for call in changes.file.call_args_list])
+
+    def test_hook_skips_other_interfaces_and_targets_selected_interface(self):
+        # Run the shell hook with a harmless stand-in, never the host's ethtool.
+        import os
+        import subprocess
+        hook = ws.system_files(self.config)[ws.WOL_HOOK]
+        marker = self.directory / "called"
+        stub = self.directory / "ethtool-stub"
+        stub.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$MARKER"\n')
+        stub.chmod(0o755)
+        hook = hook.replace("/usr/sbin/ethtool", str(stub))
+        script = self.directory / "hook"
+        script.write_text(hook)
+        for interface in ("lo", "wlp4s0", "--all", ""):
+            subprocess.run(["sh", str(script)], env=dict(os.environ, IFACE=interface, MARKER=str(marker)), check=True)
+            self.assertFalse(marker.exists())
+        subprocess.run(["sh", str(script)], env=dict(os.environ, IFACE="eno1", MARKER=str(marker)), check=True)
+        self.assertEqual(marker.read_text(), "-s\neno1\nwol\ng\n")
+
+
 class StorageTests(QuietTest):
     def setUp(self):
         super().setUp()
@@ -87,6 +178,18 @@ class StorageTests(QuietTest):
     def test_debian_can_be_second_drive(self):
         result = ws.validate_storage(self.devices, **self.options)
         self.assertEqual(result["name"], "/dev/nvme1n1p3")
+
+    def test_decimal_24gb_swap_is_accepted(self):
+        # Conservative regression using the target's reported usable swap size.
+        swap = next(d for d in self.devices if d.get("uuid") == SWAP_UUID)
+        swap["size"] = 23_999_803_392
+        self.assertEqual(ws.validate_storage(self.devices, **self.options), swap)
+
+    def test_swap_below_alignment_tolerance_is_rejected(self):
+        swap = next(d for d in self.devices if d.get("uuid") == SWAP_UUID)
+        swap["size"] = 24_000_000_000 - 1024**2 - 1
+        with self.assertRaisesRegex(ws.SetupError, "24 GB"):
+            ws.validate_storage(self.devices, **self.options)
 
     def test_wrong_efi_unknown_swap_inactive_or_nonpersistent(self):
         for change in ({"efi_device": "/dev/nvme0n1p1"}, {"swap_uuid": "unknown"},

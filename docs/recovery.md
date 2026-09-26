@@ -48,8 +48,15 @@ run the full bootstrap in a rescue chroot.
 
 ## Networking and SSH
 
-`network-before.json` records the interface, connection UUID, previous profile
-WoL property, and live flags. From a local console, restore them using
+`network-before.json` records the manager, interface, connection UUID (if any),
+previous profile WoL property (NetworkManager only), and live flags.
+For ifupdown, restore/remove `/etc/network/if-up.d/workstation-wol` according to
+the file manifest and restore live flags with `ethtool -s INTERFACE wol FLAGS`.
+The original interfaces configuration is never edited, so no networking restart
+or migration is needed. Do not switch to NetworkManager without removing or
+restoring the ifupdown hook explicitly.
+
+For NetworkManager, from a local console restore prior settings using
 `nmcli connection modify uuid UUID 802-3-ethernet.wake-on-lan VALUE` and
 `ethtool -s INTERFACE wol FLAGS`. If nmcli printed a number and descriptive suffix,
 use the numeric value. No deliberate disconnect is needed.

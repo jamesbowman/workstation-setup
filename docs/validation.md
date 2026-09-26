@@ -1,5 +1,15 @@
 # Repository validation
 
+## Existing installer networking and decimal swap capacity
+
+The portable suite now has 29 passing tests, including ifupdown discovery,
+NetworkManager ownership conflicts, optional connection UUIDs, scoped hook
+execution with a harmless ethtool stand-in, and preservation of networking during
+system setup. The hook passes shell syntax validation. The target's approximately
+24 decimal GB swap capacity has a regression test, alongside undersized-swap
+rejection. These checks ran on macOS; actual WoL persistence and network-manager
+service validation remain target checks.
+
 ## Dotfile update (2026-09-25)
 
 Personal dotfiles were validated with isolated temporary-home Vim/zsh sessions

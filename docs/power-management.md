@@ -28,14 +28,17 @@ unsupported firmware state. See [kernel sleep states](https://docs.kernel.org/ad
 `[s2idle] deep` before the first sleep is acceptable: systemd selects deep when
 the operation begins.
 
-24 GiB exceeds 16 GiB RAM, but available swap and memory pressure still matter.
+24 decimal GB (about 22.35 GiB) exceeds 16 GiB RAM, but available swap and memory
+pressure still matter. A partition created as `24 GB` does not need resizing to
+24 GiB for this setup; both sizes satisfy the requested approximate capacity.
 Inspect `free -h` and `swapon --show` before loaded tests; do not bypass systemd's
 hibernation checks. Setup never creates, resizes, clears, or activates swap.
 
 ## Wake-on-LAN
 
-Setup enables magic-packet wake on the selected active NetworkManager Ethernet
-profile and sets the live NIC flag with ethtool without cycling the connection.
+Setup enables magic-packet wake through the existing network manager: an if-up
+hook for ifupdown, or the selected active Ethernet profile for NetworkManager.
+It sets the live NIC flag with ethtool without cycling the connection.
 The previous settings are saved. Test after reboot, S3, and S4: drivers/firmware
 can clear wake flags across transitions. S5 wake is an independent optional test.
 

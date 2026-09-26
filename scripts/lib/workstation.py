@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ENV = dict(os.environ, LC_ALL="C", PATH="/usr/sbin:/usr/bin:/sbin:/bin")
 PROFILES = {"base", "desktop", "development", "media", "latex"}
 GIB = 1024**3
+WOL_HOOK = Path("/etc/network/if-up.d/workstation-wol")
 
 
 class SetupError(Exception):
@@ -57,12 +58,20 @@ def guard():
 def load_config(path, identifiers=False):
     with Path(path).open("rb") as stream:
         config = tomllib.load(stream)
-    schema = {"storage": {"swap_uuid"}, "network": {"interface", "connection_uuid"},
+    # Preserve compatibility with existing NetworkManager configurations.
+    if isinstance(config.get("network"), dict):
+        config["network"].setdefault("manager", "networkmanager")
+        config["network"].setdefault("connection_uuid", "")
+    schema = {"storage": {"swap_uuid"}, "network": {"interface", "connection_uuid", "manager"},
               "packages": {"profiles", "tailscale"}}
     require(set(config) == set(schema), "Config must contain storage, network, packages only.")
     for section, keys in schema.items():
         require(isinstance(config[section], dict) and set(config[section]) == keys,
                 f"Unexpected or missing config keys in {section}.")
+    manager = config["network"]["manager"]
+    require(manager in ("networkmanager", "ifupdown"), "network.manager must be networkmanager or ifupdown.")
+    require(manager != "ifupdown" or config["network"]["connection_uuid"] == "",
+            "Leave connection_uuid empty for ifupdown.")
     profiles = config["packages"]["profiles"]
     require(isinstance(profiles, list) and all(isinstance(p, str) for p in profiles),
             "profiles must be a list of strings.")
@@ -72,7 +81,7 @@ def load_config(path, identifiers=False):
     for section, key in (("storage", "swap_uuid"), ("network", "connection_uuid")):
         value = config[section][key]
         require(isinstance(value, str), f"{key} must be a string.")
-        if value or identifiers:
+        if value or (identifiers and (key == "swap_uuid" or manager == "networkmanager")):
             require(re.fullmatch(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", value),
                     f"Set {key} to the real UUID from preflight.")
             config[section][key] = value.lower()
@@ -85,6 +94,8 @@ def load_config(path, identifiers=False):
 
 def packages(config):
     names = set()
+    if config["network"].get("manager") == "ifupdown":
+        names.add("ifupdown")
     for profile in config["packages"]["profiles"]:
         for line in read(ROOT / "packages" / f"{profile}.txt").splitlines():
             name = line.split("#", 1)[0].strip()
@@ -183,7 +194,9 @@ def validate_storage(devices, swap_uuid, root_device, efi_device, active, persis
     require(swap["type"] == "part" and swap["fstype"] == "swap", "Selected UUID is not a swap partition.")
     require(swap.get("pkname") and swap["pkname"] == root.get("pkname"),
             "Swap must be on the same Debian drive as root.")
-    require(swap["size"] >= 24 * GIB - 1024**2, "Swap partition must be approximately 24 GiB or larger.")
+    # The requested capacity is decimal GB. Allow 1 MiB for installer alignment.
+    require(swap["size"] >= 24_000_000_000 - 1024**2,
+            "Swap partition must be approximately 24 GB (22.35 GiB) or larger.")
     efi = by_name.get(efi_device, {})
     require(efi.get("fstype") == "vfat" and efi.get("pkname") == root.get("pkname"),
             "Mount the Debian drive's independent EFI partition at /boot/efi.")
@@ -252,11 +265,43 @@ def check_sleep_conflicts():
                         f"Conflicting sleep option {key}={value} in {path}; reconcile before setup/verification.")
 
 
+def network_facts(config):
+    network = config["network"]
+    iface, connection = network["interface"], network["connection_uuid"]
+    manager = network.get("manager", "networkmanager")
+    if manager == "ifupdown":
+        require(shutil.which("ifquery", path=ENV["PATH"]), "ifupdown requires ifquery; install ifupdown first.")
+        run("ifquery", "--no-mappings", iface)
+        state = run("ifquery", "--state", iface)
+        require(any(line.startswith(iface + "=") for line in state.splitlines()),
+                "Selected interface is not recorded as up by ifupdown.")
+        # NetworkManager may still run for Wi-Fi/Tailscale, but must not own Ethernet.
+        nm = subprocess.run(["systemctl", "is-active", "--quiet", "NetworkManager"], env=ENV)
+        if nm.returncode == 0:
+            status = run("nmcli", "-g", "GENERAL.STATE", "device", "show", iface)
+            require(status.split()[:1] == ["10"], "NetworkManager must leave the ifupdown interface unmanaged.")
+        profile = None
+    else:
+        require(not WOL_HOOK.exists(), "Remove the previous ifupdown WoL hook before selecting NetworkManager.")
+        require(run("systemctl", "is-active", "NetworkManager") == "active", "NetworkManager must already manage Ethernet.")
+        require(run("nmcli", "-g", "GENERAL.CON-UUID", "device", "show", iface).lower() == connection.lower(),
+                "Selected NetworkManager connection must be active on the selected NIC.")
+        require(run("nmcli", "-g", "connection.type", "connection", "show", "uuid", connection) == "802-3-ethernet",
+                "Select a wired Ethernet connection.")
+        profile = run("nmcli", "-g", "802-3-ethernet.wake-on-lan", "connection", "show", "uuid", connection)
+    ethtool = run("ethtool", iface)
+    supported = re.search(r"Supports Wake-on:\s*(\S+)", ethtool)
+    current = re.search(r"^\s*Wake-on:\s*(\S+)", ethtool, re.MULTILINE)
+    require(supported and "g" in supported[1] and current, "NIC does not expose magic-packet WoL support.")
+    return {"manager": manager, "interface": iface, "connection_uuid": connection,
+            "wol_live": current[1], "wol_profile": profile}
+
+
 def system_facts(config):
     require(os.geteuid() == 0, "Run system preview/verification with sudo for hardware inspection.")
     require("HP EliteDesk 805 G6" in read("/sys/class/dmi/id/product_name"),
             "This system phase targets an HP EliteDesk 805 G6 only.")
-    for command in ("lsblk", "findmnt", "swapon", "nmcli", "ethtool", "sshd", "update-initramfs", "lsinitramfs"):
+    for command in ("lsblk", "findmnt", "swapon", "ethtool", "sshd", "update-initramfs", "lsinitramfs"):
         require(shutil.which(command, path=ENV["PATH"]), f"Missing {command}; run the packages phase first.")
     require(Path("/boot/grub/grub.cfg").is_file(), "Expected installer-managed GRUB on Debian.")
     secure = Path("/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c")
@@ -278,29 +323,22 @@ def system_facts(config):
                             [os.path.realpath(x["source"]) for x in entries])
     check_resume_conflicts(config["storage"]["swap_uuid"])
     check_sleep_conflicts()
-    iface, connection = config["network"]["interface"], config["network"]["connection_uuid"]
-    require(run("systemctl", "is-active", "NetworkManager") == "active", "NetworkManager must already manage Ethernet.")
-    require(run("nmcli", "-g", "GENERAL.CON-UUID", "device", "show", iface).lower() == connection.lower(),
-            "Selected NetworkManager connection must be active on the selected NIC.")
-    require(run("nmcli", "-g", "connection.type", "connection", "show", "uuid", connection) == "802-3-ethernet",
-            "Select a wired Ethernet connection.")
-    ethtool = run("ethtool", iface)
-    supported = re.search(r"Supports Wake-on:\s*(\S+)", ethtool)
-    current = re.search(r"^\s*Wake-on:\s*(\S+)", ethtool, re.MULTILINE)
-    require(supported and "g" in supported[1] and current, "NIC does not expose magic-packet WoL support.")
+    network = network_facts(config)
     run("/usr/sbin/sshd", "-t")
-    return {"swap": swap, "interface": iface, "connection_uuid": connection,
-            "wol_live": current[1],
-            "wol_profile": run("nmcli", "-g", "802-3-ethernet.wake-on-lan", "connection", "show", "uuid", connection)}
+    return {"swap": swap, **network}
 
 
 def system_files(config):
-    return {
+    files = {
         Path("/etc/initramfs-tools/conf.d/resume"): read(ROOT / "system/resume/resume.in").replace(
             "@SWAP_UUID@", config["storage"]["swap_uuid"]),
         Path("/etc/systemd/sleep.conf.d/60-workstation.conf"): read(ROOT / "system/sleep/60-workstation.conf"),
         Path("/etc/ssh/sshd_config.d/00-workstation.conf"): read(ROOT / "system/ssh/00-workstation.conf"),
     }
+    if config["network"].get("manager") == "ifupdown":
+        files[WOL_HOOK] = read(ROOT / "system/networking/ifupdown-wol.in").replace(
+            "@INTERFACE@", config["network"]["interface"])
+    return files
 
 
 def apply_system(config, changes):
@@ -309,7 +347,7 @@ def apply_system(config, changes):
     if changes.apply:
         changes.save("network-before.json", json.dumps(facts, indent=2) + "\n")
     for path, data in system_files(config).items():
-        changes.file(path, data)
+        changes.file(path, data, 0o755 if path == WOL_HOOK else 0o644)
     # Always rebuild: a previous run may have failed after writing resume config.
     changes.command("update-initramfs", "-u", "-k", "all")
     changes.command("/usr/sbin/sshd", "-t")
@@ -319,7 +357,7 @@ def apply_system(config, changes):
                 "Existing SSH configuration overrides the drop-in; resolve before reloading SSH.")
     changes.command("systemctl", "enable", "--now", "ssh")
     changes.command("systemctl", "reload", "ssh")
-    if facts["wol_profile"] not in {"magic", "64", "64 (magic)"}:
+    if facts.get("manager", "networkmanager") == "networkmanager" and facts["wol_profile"] not in {"magic", "64", "64 (magic)"}:
         changes.command("nmcli", "connection", "modify", "uuid", facts["connection_uuid"],
                         "802-3-ethernet.wake-on-lan", "magic")
     if facts["wol_live"] != "g":
@@ -418,6 +456,8 @@ def verify(config):
 
     for path, data in system_files(config).items():
         check(path.is_file() and path.read_text() == data, str(path))
+        if path == WOL_HOOK:
+            check(path.is_file() and path.stat().st_mode & 0o777 == 0o755, "ifupdown WoL hook is executable")
     # Compare live kernel resume device: a matching file alone cannot prove boot integration.
     device = os.stat(facts["swap"]["name"]).st_rdev
     expected = f"{os.major(device)}:{os.minor(device)}"
@@ -427,11 +467,13 @@ def verify(config):
     check(image.is_file() and "conf/conf.d/resume" in run("lsinitramfs", str(image)).splitlines(),
           "running kernel's initramfs contains resume configuration")
     check(facts["wol_live"] == "g", "live magic-packet WoL")
-    check(facts["wol_profile"] in {"magic", "64", "64 (magic)"}, "persistent NetworkManager WoL")
+    if facts["manager"] == "networkmanager":
+        check(facts["wol_profile"] in {"magic", "64", "64 (magic)"}, "persistent NetworkManager WoL")
     effective = dict(line.split(" ", 1) for line in run("/usr/sbin/sshd", "-T").splitlines())
     check(effective.get("permitrootlogin") == "no", "SSH root login disabled")
     check(effective.get("x11forwarding") == "no", "SSH X11 forwarding disabled")
-    for service in ("ssh", "NetworkManager") + (("tailscaled",) if config["packages"]["tailscale"] else ()):
+    network_service = "NetworkManager" if facts["manager"] == "networkmanager" else "networking"
+    for service in ("ssh", network_service) + (("tailscaled",) if config["packages"]["tailscale"] else ()):
         for state in ("is-active", "is-enabled"):
             try:
                 run("systemctl", state, service)

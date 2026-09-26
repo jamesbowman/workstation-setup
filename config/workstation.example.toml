@@ -1,11 +1,12 @@
 # Copy to workstation.toml on Debian. This local copy is ignored by Git.
 # Obtain identifiers using scripts/preflight; never guess a disk by its number.
 [storage]
-swap_uuid = ""                 # UUID of the existing 24 GiB Debian swap partition
+swap_uuid = ""                 # UUID of the existing approximately 24 GB swap partition
 
 [network]
+manager = "ifupdown"            # Preserve installer networking; or "networkmanager"
 interface = ""                 # Wired interface, for example enp2s0
-connection_uuid = ""           # Active NetworkManager wired connection UUID
+connection_uuid = ""           # Required only for NetworkManager; empty for ifupdown
 
 [packages]
 profiles = ["base", "desktop", "development", "media", "latex"]

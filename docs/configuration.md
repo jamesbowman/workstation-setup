@@ -16,9 +16,22 @@ packages/system/verify. Preflight and user setup need no TOML. No phase runs
 another implicitly. Resolve failures before proceeding.
 
 Copy the example TOML. Empty identifiers are allowed for package installation;
-system/verify require actual UUIDs and the wired interface. Obtain them from
-preflight, `lsblk -f`, and `nmcli -f NAME,UUID,TYPE,DEVICE connection show`.
+system/verify require the actual swap UUID and wired interface. Set
+`network.manager` to `ifupdown` for installer-managed Ethernet (the example's
+default), or `networkmanager` for an existing NM profile. Only NetworkManager
+requires `connection_uuid`; leave it empty or omit it for ifupdown. Old configs
+without a manager field retain the previous NetworkManager behavior. Obtain
+identifiers from preflight, `lsblk -f`, and, for NetworkManager,
+`nmcli -f NAME,UUID,TYPE,DEVICE connection show`.
 No credentials belong in TOML, and it is never evaluated as shell code.
+
+The system phase preserves the existing network manager. With ifupdown it checks
+the interface is configured and recorded as up, and that a running NetworkManager
+leaves it unmanaged. It installs `/etc/network/if-up.d/workstation-wol` (mode 755)
+for the selected interface. Both backends set only the live ethtool wake flag;
+neither restarts networking or cycles the link. Verification checks the selected
+manager's service and WoL persistence configuration. The ifupdown hook requires
+normal if-up hooks to be enabled; do not use `no-scripts` for this interface.
 
 ## Packages and reproducibility
 

@@ -16,8 +16,11 @@ does not partition, format, install GRUB, or edit firmware.
    disconnect the Windows drive when practical so the installer cannot reuse its
    EFI partition. Otherwise verify every partition and bootloader destination.
 5. On the **Debian NVMe**, create GPT with an approximately 1 GiB FAT32 EFI System
-   Partition mounted at `/boot/efi`, ext4 `/`, and a **24 GiB Linux swap
-   partition**. 24 GiB is 25,769,803,776 bytes (about 25.8 decimal GB). Use direct
+   Partition mounted at `/boot/efi`, ext4 `/`, and an **approximately 24 GB Linux
+   swap partition**. Entering `24 GB` in the installer gives about 22.35 GiB,
+   displayed as roughly 22.4G by lsblk; this meets the original requirement.
+   A 24 GiB partition (25,769,803,776 bytes) is also accepted. The size check
+   allows 1 MiB below 24 decimal GB for installer alignment. Use direct
    partitions; system setup rejects LVM, RAID, encryption, Btrfs, and swapfiles.
 6. Have the installer enable swap and add its UUID to `/etc/fstab`. Install
    Debian's UEFI GRUB on the Debian drive's EFI partition. Do not mount the
@@ -43,12 +46,16 @@ display-manager, and networking configuration yourself.
 
 ## Wired networking
 
-The system phase requires an already-active **NetworkManager** Ethernet profile.
-Installing NetworkManager does not migrate ifupdown. On minimal netinst, Ethernet
-may remain in `/etc/network/interfaces`. From a **local console**, back up that
-file, retain loopback, and manually migrate the interface's DHCP/static settings
-to NetworkManager. Do not run two managers for the same interface. Verify network
-access before selecting its interface and connection UUID in TOML.
+Keep the installer's working wired networking. If Ethernet is defined in
+`/etc/network/interfaces` or an included file and appears unmanaged in nmcli,
+select `manager = "ifupdown"`, set the interface name, and leave `connection_uuid`
+empty. System setup installs a per-interface WoL hook and sets the live wake flag
+without changing interfaces files, DHCP, routes, DNS, or restarting networking.
+
+If NetworkManager already manages Ethernet, select `manager = "networkmanager"`
+and supply the active connection UUID. Both backends are supported; migration is
+not required. NetworkManager may manage Wi-Fi while ifupdown manages Ethernet.
+Do not allow both managers to own the same interface.
 
 ## Dual boot
 
